@@ -4466,6 +4466,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		AttrNumber	attno = partnode->part->paratts[0];
 		Datum		exprValue = values[attno - 1];
 		int			ret;
+		Oid			ruleTypeOid
 
 		mid = low + (high - low) / 2;
 
@@ -4480,20 +4481,12 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 			goto l_fin_range;
 		}
 
-		Oid			ruleTypeOid = tupdesc->attrs[attno - 1]->atttypid;
-
-		if (OidIsValid(exprTypeOid))
+		ruleTypeOid = ((Const *) linitial((List *) rule->parrangestart))->consttype;
+		if (!OidIsValid(exprTypeOid))
 		{
-			ret = range_test(exprValue, ruleTypeOid, exprTypeOid, rs, 0, rule);
+			exprTypeOid = tupdesc->attrs[attno - 1]->atttypid;
 		}
-		else
-		{
-			/*
-			 * In some cases, we don't have an expression type oid. In those
-			 * cases, the expression and partition rules have the same type.
-			 */
-			ret = range_test(exprValue, ruleTypeOid, ruleTypeOid, rs, 0, rule);
-		}
+		ret = range_test(exprValue, ruleTypeOid, exprTypeOid, rs, 0, rule);
 
 		if (ret > 0)
 		{
