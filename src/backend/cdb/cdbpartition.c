@@ -4127,20 +4127,23 @@ selectListPartition(PartitionNode *partnode, Datum *values, bool *isnull,
 						 * The tupdesc tuple descriptor matches the table
 						 * schema, so it has the rule type
 						 */
-						Oid			rhstypid = tupdesc->attrs[attno - 1]->atttypid;
+						/*
+						 * The type of rule is defined in const type
+						 */
+						Oid			rhstypid = c->consttype;
 
 						/*
 						 * exprTypeOid is passed to us from our caller which
 						 * evaluated the expression. In some cases (e.g legacy
-						 * optimizer doing explicit casting), we don't compute
-						 * specify exprTypeOid. Assume lhstypid = rhstypid in
-						 * those cases
+						 * optimizer doing explicit casting), we don't specify
+						 * exprTypeOid and type of expr is defined by
+						 * corresponding column of tupdesc tuple descriptor.
 						 */
 						Oid			lhstypid = exprTypeOid;
 
 						if (!OidIsValid(lhstypid))
 						{
-							lhstypid = rhstypid;
+							lhstypid = tupdesc->attrs[attno - 1]->atttypid;
 						}
 
 						List	   *opname = list_make2(makeString("pg_catalog"),
@@ -4466,7 +4469,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		AttrNumber	attno = partnode->part->paratts[0];
 		Datum		exprValue = values[attno - 1];
 		int			ret;
-		Oid			ruleTypeOid
+		Oid			ruleTypeOid;
 
 		mid = low + (high - low) / 2;
 
@@ -4481,7 +4484,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 			goto l_fin_range;
 		}
 
-		ruleTypeOid = ((Const *) linitial((List *) rule->parrangestart))->consttype;
+		ruleTypeOid = exprType(linitial((List *) rule->parrangestart));
 		if (!OidIsValid(exprTypeOid))
 		{
 			exprTypeOid = tupdesc->attrs[attno - 1]->atttypid;
