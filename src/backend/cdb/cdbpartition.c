@@ -170,7 +170,7 @@ static PartitionNode *selectListPartition(PartitionNode *partnode, Datum *values
 					Oid *foundOid, PartitionRule **prule, Oid exprTypid);
 static Oid	get_less_than_oper(Oid lhstypid, Oid rhstypid, bool strictlyless);
 static FmgrInfo *get_less_than_comparator(int keyno, PartitionRangeState *rs, Oid ruleTypeOid, Oid exprTypeOid, bool strictlyless, bool is_direct);
-static int range_test(Datum tupval, Oid ruleTypeOid, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
+static int range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		   PartitionRule *rule);
 static PartitionNode *selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 					 TupleDesc tupdesc, PartitionAccessMethods *accessMethods,
@@ -4298,7 +4298,6 @@ get_less_than_comparator(int keyno, PartitionRangeState *rs, Oid ruleTypeOid, Oi
  *
  *  Input parameters:
  *    tupval: The value of the expression
- *    ruleTypeOid: The type of the partition rule boundaries
  *    exprTypeOid: The type of the expression (can be different from ruleTypeOid
  *      if types can be directly compared with each other)
  *    rs: The partition range state
@@ -4307,7 +4306,7 @@ get_less_than_comparator(int keyno, PartitionRangeState *rs, Oid ruleTypeOid, Oi
  *
  */
 static int
-range_test(Datum tupval, Oid ruleTypeOid, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
+range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		   PartitionRule *rule)
 {
 	Const	   *c = NULL;
@@ -4333,7 +4332,7 @@ range_test(Datum tupval, Oid ruleTypeOid, Oid exprTypeOid, PartitionRangeState *
 		 * Otherwise, we request comparator ruleVal < exprVal ( ==>
 		 * strictly_less = true)
 		 */
-		finfo = get_less_than_comparator(keyno, rs, ruleTypeOid, exprTypeOid, !rule->parrangestartincl /* strictly_less */ , false /* is_direct */ );
+		finfo = get_less_than_comparator(keyno, rs, c->consttype, exprTypeOid, !rule->parrangestartincl /* strictly_less */ , false /* is_direct */ );
 		res = FunctionCall2Coll(finfo, c->constcollid, c->constvalue, tupval);
 
 		if (!DatumGetBool(res))
@@ -4355,7 +4354,7 @@ range_test(Datum tupval, Oid ruleTypeOid, Oid exprTypeOid, PartitionRangeState *
 		 * Otherwise, we request comparator exprVal < ruleVal ( ==>
 		 * strictly_less = true)
 		 */
-		finfo = get_less_than_comparator(keyno, rs, ruleTypeOid, exprTypeOid, !rule->parrangeendincl /* strictly_less */ , true /* is_direct */ );
+		finfo = get_less_than_comparator(keyno, rs, c->consttype, exprTypeOid, !rule->parrangeendincl /* strictly_less */ , true /* is_direct */ );
 		res = FunctionCall2Coll(finfo, c->constcollid, tupval, c->constvalue);
 
 		if (!DatumGetBool(res))
@@ -4469,7 +4468,6 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		AttrNumber	attno = partnode->part->paratts[0];
 		Datum		exprValue = values[attno - 1];
 		int			ret;
-		Oid			ruleTypeOid;
 
 		mid = low + (high - low) / 2;
 
@@ -4484,12 +4482,11 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 			goto l_fin_range;
 		}
 
-		ruleTypeOid = exprType(linitial((List *) rule->parrangestart));
 		if (!OidIsValid(exprTypeOid))
 		{
 			exprTypeOid = tupdesc->attrs[attno - 1]->atttypid;
 		}
-		ret = range_test(exprValue, ruleTypeOid, exprTypeOid, rs, 0, rule);
+		ret = range_test(exprValue, exprTypeOid, rs, 0, rule);
 
 		if (ret > 0)
 		{
@@ -4556,8 +4553,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				 * comparators, so both sides must be of identical types
 				 */
 				Assert(!OidIsValid(exprTypeOid));
-				ret = range_test(d, ruleTypeOid, ruleTypeOid,
-								 rs, i, rule);
+				ret = range_test(d, ruleTypeOid, rs, i, rule);
 				if (ret != 0)
 				{
 					matched = false;
@@ -4616,7 +4612,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				 * comparators, so both sides must be of identical types
 				 */
 				Assert(!OidIsValid(exprTypeOid));
-				ret = range_test(d, ruleTypeOid, ruleTypeOid, rs, i, rule);
+				ret = range_test(d, ruleTypeOid, rs, i, rule);
 				if (ret != 0)
 				{
 					matched = false;
