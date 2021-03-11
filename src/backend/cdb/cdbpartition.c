@@ -4139,12 +4139,8 @@ selectListPartition(PartitionNode *partnode, Datum *values, bool *isnull,
 						 * exprTypeOid and type of expr is defined by
 						 * corresponding column of tupdesc tuple descriptor.
 						 */
-						Oid			lhstypid = exprTypeOid;
-
-						if (!OidIsValid(lhstypid))
-						{
-							lhstypid = tupdesc->attrs[attno - 1]->atttypid;
-						}
+						Oid			lhstypid = (OidIsValid(lhstypid)) ?
+							exprTypeOid : tupdesc->attrs[attno - 1]->atttypid;
 
 						List	   *opname = list_make2(makeString("pg_catalog"),
 														makeString("="));
@@ -4468,6 +4464,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		AttrNumber	attno = partnode->part->paratts[0];
 		Datum		exprValue = values[attno - 1];
 		int			ret;
+		Oid			searchValueTypeOid;
 
 		mid = low + (high - low) / 2;
 
@@ -4482,11 +4479,9 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 			goto l_fin_range;
 		}
 
-		if (!OidIsValid(exprTypeOid))
-		{
-			exprTypeOid = tupdesc->attrs[attno - 1]->atttypid;
-		}
-		ret = range_test(exprValue, exprTypeOid, rs, 0, rule);
+		searchValueTypeOid = (OidIsValid(exprTypeOid)) ? exprTypeOid :
+			tupdesc->attrs[attno - 1]->atttypid;
+		ret = range_test(exprValue, searchValueTypeOid, rs, 0, rule);
 
 		if (ret > 0)
 		{
@@ -4536,6 +4531,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				AttrNumber	attno = partnode->part->paratts[i];
 				Datum		d = values[attno - 1];
 				int			ret;
+				Oid			searchValueTypeOid;
 
 				if (j != mid)
 					rule = (PartitionRule *) list_nth(rules, j);
@@ -4546,14 +4542,14 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 					goto l_fin_range;
 				}
 
-				Oid			ruleTypeOid = tupdesc->attrs[attno - 1]->atttypid;
-
 				/*
-				 * For composite partition keys, we don't support casting
-				 * comparators, so both sides must be of identical types
+				 * For composite partition keys, we don't input exprTypeOid so
+				 * the real type of search datum have to be supplied inside
+				 * tupdesc tuple descriptor
 				 */
 				Assert(!OidIsValid(exprTypeOid));
-				ret = range_test(d, ruleTypeOid, rs, i, rule);
+				searchValueTypeOid = tupdesc->attrs[attno - 1]->atttypid;
+				ret = range_test(d, searchValueTypeOid, rs, i, rule);
 				if (ret != 0)
 				{
 					matched = false;
@@ -4596,6 +4592,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				AttrNumber	attno = partnode->part->paratts[i];
 				Datum		d = values[attno - 1];
 				int			ret;
+				Oid			searchValueTypeOid;
 
 				rule = (PartitionRule *) list_nth(rules, j);
 
@@ -4605,14 +4602,14 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 					goto l_fin_range;
 				}
 
-				Oid			ruleTypeOid = tupdesc->attrs[attno - 1]->atttypid;
-
 				/*
-				 * For composite partition keys, we don't support casting
-				 * comparators, so both sides must be of identical types
+				 * For composite partition keys, we don't input exprTypeOid so
+				 * the real type of search datum have to be supplied inside
+				 * tupdesc tuple descriptor
 				 */
 				Assert(!OidIsValid(exprTypeOid));
-				ret = range_test(d, ruleTypeOid, rs, i, rule);
+				searchValueTypeOid = tupdesc->attrs[attno - 1]->atttypid;
+				ret = range_test(d, searchValueTypeOid, rs, i, rule);
 				if (ret != 0)
 				{
 					matched = false;
